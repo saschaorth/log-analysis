@@ -1,56 +1,46 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python3
 
 import psycopg2
 
 TOP_ARTICLES_QUERY = '''
-select 
-    a.title, 
-    l.views 
+select
+    a.title,
+    count(1) as views
 from articles a
-join (
-    select 
-        split_part(path, '/', 3) as slug, 
-        count(1) as views 
-    from log 
-    where status = '200 OK' 
-    group by path 
-    order by views desc
-) l on (a.slug = l.slug)
+join log l on l.path = concat('/article/', a.slug)
+where l.status = '200 OK'
+group by a.title
+order by views desc
 limit 3;
 '''
 
 TOP_AUTHORS_QUERY = '''
-select 
-    au.name as author_name, 
-    sum(l.views) as views 
+select
+    au.name as author_name,
+    count(1) as views
 from articles ar
 join authors au on ar.author = au.id
-join (
-    select 
-        split_part(path, '/', 3) as slug, 
-        count(1) as views 
-    from log 
-    where status = '200 OK' 
-    group by path 
-) l on (ar.slug = l.slug)
+join log l on l.path = concat('/article/', ar.slug)
+where l.status = '200 OK'
 group by author_name
 order by views desc
 limit 3;
 '''
 
 REQUEST_ERROR_QUERY = '''
-select 
-    to_char(date, 'FMMonth FMDD, YYYY'), 
-    round((error::decimal / NULLIF(ok, 0)) * 100, 2)  as "% errors"
+select
+    to_char(date, 'FMMonth FMDD, YYYY'),
+    round((error_requests::decimal / NULLIF(total_requests, 0)) * 100, 2)  as
+     "% errors"
 from (
     select
-        date_trunc('day', time) as date, 
-        sum(case when status != '200 OK' then 1 else 0 end) as error, 
-        sum(case when status = '200 OK' then 1 else 0 end) as ok 
-    from log 
+        date_trunc('day', time) as date,
+        sum(case when status != '200 OK' then 1 else 0 end) as error_requests,
+        count(1) as total_requests
+    from log
     group by date
 ) agg
-where (error::decimal / NULLIF(ok, 0)) * 100 > 1;
+where (error_requests::decimal / NULLIF(total_requests, 0)) * 100 > 1;
 '''
 
 
